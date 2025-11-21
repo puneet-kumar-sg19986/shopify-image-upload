@@ -14,6 +14,16 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+  // Debugging: log method and a few headers so callers (e.g. Postman) are visible in server logs.
+  // This helps diagnose why you're seeing a 405 when you expect a POST.
+  console.log("API request method:", req.method);
+  console.log("API request headers (select):", {
+    host: req.headers.host,
+    origin: req.headers.origin,
+    referer: req.headers.referer,
+    "content-type": req.headers["content-type"]
+  });
+
   // Handle preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -21,7 +31,10 @@ export default async function handler(req, res) {
 
   // Only POST allowed
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Only POST allowed" });
+    // include actual method in response to make debugging easier from client side
+    return res
+      .status(405)
+      .json({ error: "Only POST allowed", receivedMethod: req.method });
   }
 
   // Parse incoming form-data
