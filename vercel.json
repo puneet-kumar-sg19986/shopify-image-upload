@@ -1,9 +1,5 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/upload-to-shopify.js", "use": "@vercel/node" },
-    { "src": "public/**/*", "use": "@vercel/static" }
-  ],
+  "version": 3,
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/(.*)", "dest": "/public/$1" }
