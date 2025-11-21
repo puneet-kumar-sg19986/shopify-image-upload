@@ -9,20 +9,33 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  // CORS Headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // Handle preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  // Only POST allowed
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Only POST allowed" });
   }
 
+  // Parse incoming form-data
   const form = new formidable.IncomingForm();
   form.keepExtensions = true;
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error("form parse error", err);
+      console.error("Form parse error:", err);
       return res.status(500).json({ error: "Form parse error" });
     }
 
     try {
+      // Collect uploaded files
       const fileEntries = [];
       for (const key of Object.keys(files)) {
         const val = files[key];
@@ -30,20 +43,24 @@ export default async function handler(req, res) {
         else fileEntries.push(val);
       }
 
-      const SHOPIFY_STORE = process.env.SHOPIFY_STORE; // e.g. your-store.myshopify.com
+      // Environment variables
+      const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
       const ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 
       if (!SHOPIFY_STORE || !ACCESS_TOKEN) {
-        return res.status(500).json({ error: "Missing environment variables" });
+        return res
+          .status(500)
+          .json({ error: "Missing SHOPIFY_STORE or SHOPIFY_ACCESS_TOKEN" });
       }
 
       const uploadedUrls = [];
 
+      // Upload every file to Shopify
       for (const f of fileEntries) {
-        const data = fs.readFileSync(f.filepath);
-        const base64 = data.toString("base64");
+        const fileBuffer = fs.readFileSync(f.filepath);
+        const base64 = fileBuffer.toString("base64");
 
-        const shopifyRes = await fetch(
+        const uploadRes = await fetch(
           `https://${SHOPIFY_STORE}/admin/api/2024-10/files.json`,
           {
             method: "POST",
@@ -60,25 +77,30 @@ export default async function handler(req, res) {
           }
         );
 
-        if (!shopifyRes.ok) {
-          const text = await shopifyRes.text();
-          console.error("Shopify API error:", shopifyRes.status, text);
-          return res.status(502).json({ error: "Shopify API error", details: text });
+        const data = await uploadRes.json();
+
+        if (!uploadRes.ok) {
+          console.error("Shopify API error:", data);
+          return res.status(502).json({
+            error: "Shopify API error",
+            details: data
+          });
         }
 
-        const json = await shopifyRes.json();
-        if (json && json.file && json.file.public_url) {
-          uploadedUrls.push(json.file.public_url);
-        } else {
-          uploadedUrls.push(json);
-        }
+        uploadedUrls.push(data.file.public_url);
       }
 
-      return res.json({ success: true, urls: uploadedUrls });
-
-    } catch (e) {
-      console.error("upload error", e);
-      return res.status(500).json({ error: "Upload failed", details: e.message });
+      // Success
+      return res.json({
+        success: true,
+        urls: uploadedUrls
+      });
+    } catch (error) {
+      console.error("Server error:", error);
+      return res.status(500).json({
+        error: "Upload failed",
+        details: error.message
+      });
     }
   });
 }
